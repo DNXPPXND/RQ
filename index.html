@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <meta
+      name="description"
+      content="ระบบจัดการคลังวัสดุ การเบิกจ่าย และสำรวจความต้องการวัสดุ"
+    />
+    <title>ระบบจัดการคลังวัสดุ | Engineering</title>
+
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("inventory-theme");
+        if (savedTheme === "light" || savedTheme === "dark") {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch (error) {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Sarabun:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">E</div>
+        <div>
+          <strong>Engineering</strong>
+          <small>Inventory System</small>
+        </div>
+      </div>
+
+      <nav class="navigation" aria-label="เมนูหลัก">
+        <button class="nav-link active" data-page="dashboard" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">⌂</span>
+          <span class="nav-label">ภาพรวม</span>
+        </button>
+        <button class="nav-link" data-page="inventory">
+          <span class="nav-icon" aria-hidden="true">▤</span>
+          <span class="nav-label">คลังวัสดุ</span>
+        </button>
+        <button class="nav-link" data-page="requisition">
+          <span class="nav-icon" aria-hidden="true">＋</span>
+          <span class="nav-label">เบิกวัสดุ</span>
+        </button>
+        <button class="nav-link" data-page="survey">
+          <span class="nav-icon" aria-hidden="true">◷</span>
+          <span class="nav-label">สำรวจรายเดือน</span>
+        </button>
+      </nav>
+
+      <button
+        class="btn btn-theme"
+        id="theme-toggle"
+        type="button"
+        aria-label="เปลี่ยนเป็นธีมมืด"
+        title="เปลี่ยนธีม"
+      >
+        <span id="theme-toggle-icon" aria-hidden="true">☾</span>
+        <span id="theme-toggle-label">โหมดมืด</span>
+      </button>
+
+      <div class="sidebar-footer">
+        <span class="status-dot"></span>
+        Google Sheets
+        <small>Inventory Management</small>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ENGINEERING / INVENTORY</p>
+          <h1 id="page-title">ภาพรวมระบบ</h1>
+          <p class="topbar-description">ระบบจัดการคลังวัสดุและการเบิกจ่าย</p>
+        </div>
+
+        <div class="topbar-actions">
+          <span class="today-label" id="dashboard-date"></span>
+          <button class="btn btn-light" id="refresh-btn" type="button">
+            ↻ รีเฟรชข้อมูล
+          </button>
+        </div>
+      </header>
+
+      <div
+        id="message"
+        class="message hidden"
+        role="status"
+        aria-live="polite"
+      ></div>
+
+      <!-- ================= DASHBOARD ================= -->
+      <section id="page-dashboard" class="page">
+        <div class="dashboard-hero">
+          <div>
+            <h2>จัดการคลังวัสดุได้ในที่เดียว</h2>
+            <p>
+              ติดตามยอดคงเหลือ ตรวจสอบวัสดุใกล้หมด และบันทึกการเบิกได้อย่างสะดวก
+            </p>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-white" type="button" data-go="requisition">
+              ＋ เบิกวัสดุ
+            </button>
+            <button
+              class="btn btn-outline-white"
+              type="button"
+              data-go="inventory"
+            >
+              ดูคลังวัสดุ
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <article class="stat-card stat-card-total">
+            <span class="stat-label">รายการวัสดุทั้งหมด</span>
+            <strong id="stat-items">0</strong>
+            <span class="stat-caption">รายการในคลัง</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">วัสดุใกล้หมด</span>
+            <strong id="stat-low" class="text-warning">0</strong>
+            <span class="stat-caption">ต่ำกว่าหรือเท่ากับขั้นต่ำ</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">รายการเบิกตามตัวกรอง</span>
+            <strong id="stat-requisitions">0</strong>
+            <span class="stat-caption">จำนวนครั้งที่เบิก</span>
+          </article>
+
+          <article class="stat-card">
+            <span class="stat-label">รายการสำรวจ</span>
+            <strong id="stat-surveys">0</strong>
+            <span class="stat-caption">รายการสำรวจรายเดือน</span>
+          </article>
+        </div>
+
+        <div class="panel dashboard-filters">
+          <div class="panel-heading">
+            <div>
+              <h2>ตัวกรองข้อมูลการเบิก</h2>
+              <p>เลือกช่วงเดือนและหน่วยงานเพื่อวิเคราะห์ข้อมูล</p>
+            </div>
+            <button class="btn btn-light" id="reset-dashboard-filters" type="button">
+              ล้างตัวกรอง
+            </button>
+          </div>
+          <div class="filter-controls">
+            <label>
+              ตั้งแต่เดือน
+              <input id="dashboard-start-month" type="month">
+            </label>
+            <label>
+              ถึงเดือน
+              <input id="dashboard-end-month" type="month">
+            </label>
+            <label>
+              หน่วยงาน
+              <select id="dashboard-department">
+                <option value="">ทุกหน่วยงาน</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="dashboard-charts-grid">
+          <div class="panel trend-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>แนวโน้มการเบิกรายเดือน</h2>
+                <p>จำนวนรายการเบิกในแต่ละเดือนตามตัวกรอง</p>
+              </div>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="requisition-trend-chart" aria-label="กราฟแนวโน้มการเบิกวัสดุรายเดือน"></canvas>
+              <p id="trend-empty" class="empty-note hidden">ไม่มีข้อมูลการเบิกในช่วงเวลาที่เลือก</p>
+            </div>
+          </div>
+
+          <div class="panel category-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>ภาพรวมตามหมวดหมู่</h2>
+                <p>สัดส่วนรายการวัสดุในแต่ละหมวดหมู่</p>
+              </div>
+            </div>
+            <div class="category-chart-wrap">
+              <canvas id="category-overview" aria-label="กราฟวงกลมแสดงจำนวนวัสดุในแต่ละหมวดหมู่"></canvas>
+              <p id="category-empty" class="empty-note hidden">ยังไม่มีข้อมูลหมวดหมู่</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="analytics-grid">
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>วัสดุที่เบิกมากที่สุด</h2>
+                <p>จัดอันดับตามจำนวนรวมที่เบิก</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>อันดับ</th><th>วัสดุ</th><th>ยอดเบิก</th><th>ครั้ง</th></tr>
+                </thead>
+                <tbody id="top-items-body">
+                  <tr><td colspan="4" class="empty-cell">กำลังโหลดข้อมูล...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <h2>หน่วยงานที่เบิกมากที่สุด</h2>
+                <p>จัดอันดับตามจำนวนรวมที่เบิก</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>อันดับ</th><th>หน่วยงาน</th><th>ครั้งที่เบิก</th></tr>
+                </thead>
+                <tbody id="top-departments-body">
+                  <tr><td colspan="4" class="empty-cell">กำลังโหลดข้อมูล...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>วัสดุที่เร่งสั่ง / ใกล้หมด</h2>
+              <p>รายการที่หมดคลังหรือมีจำนวนคงเหลือไม่เกินขั้นต่ำ</p>
+            </div>
+            <button class="btn btn-light" type="button" data-go="inventory">
+              ดูคลังวัสดุ
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสวัสดุ</th>
+                  <th>ชื่อวัสดุ</th>
+                  <th>หมวดหมู่</th>
+                  <th>คงเหลือ</th>
+                  <th>ขั้นต่ำ</th>
+                  <th>สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="low-stock-body">
+                <tr>
+                  <td colspan="6" class="empty-cell">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>รายการวัสดุและหน่วยงานที่เบิก</h2>
+              <p>แสดงรายการตามตัวกรองล่าสุดไม่เกิน 10 รายการ</p>
+            </div>
+            <button class="btn btn-light" type="button" data-go="requisition">
+              ดูรายการเบิก
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>เลขที่เบิก</th>
+                  <th>วันที่</th>
+                  <th>แผนก</th>
+                  <th>ผู้เบิก</th>
+                  <th>วัสดุ</th>
+                  <th>จำนวน</th>
+                </tr>
+              </thead>
+              <tbody id="recent-requisitions-body">
+                <tr>
+                  <td colspan="6" class="empty-cell">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= INVENTORY ================= -->
+      <section id="page-inventory" class="page hidden">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>คลังวัสดุ</h2>
+              <p>รายการวัสดุและจำนวนคงเหลือในคลัง</p>
+              <p id="admin-mode-status" class="admin-mode-status">โหมดผู้ใช้ทั่วไป: ดูและแก้ไขรายการเบิกได้</p>
+            </div>
+
+            <div class="inventory-toolbar">
+              <input
+                id="inventory-search"
+                class="search-input"
+                type="search"
+                placeholder="ค้นหารหัสหรือชื่อวัสดุ..."
+                autocomplete="off"
+              />
+              <button class="btn btn-primary" id="admin-mode-btn" type="button">
+                🔒 โหมดผู้ดูแล
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสวัสดุ</th>
+                  <th>ชื่อวัสดุ</th>
+                  <th>หมวดหมู่</th>
+                  <th>หน่วย</th>
+                  <th>คงเหลือ</th>
+                  <th>ขั้นต่ำ</th>
+                  <th>สถานะ</th>
+                  <th id="inventory-action-heading" class="hidden">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-body">
+                <tr>
+                  <td colspan="8" class="empty-cell">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= REQUISITION ================= -->
+      <section id="page-requisition" class="page hidden">
+        <div class="panel form-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>แบบฟอร์มเบิกวัสดุ</h2>
+              <p>บันทึกข้อมูลและตัดจำนวนวัสดุออกจากคลังอัตโนมัติ</p>
+            </div>
+          </div>
+
+          <form id="requisition-form" class="form-grid">
+            <label>
+              แผนก
+              <select id="req-department" required>
+                <option value="">กำลังโหลดแผนก...</option>
+              </select>
+            </label>
+
+            <label>
+              ชื่อผู้เบิก
+              <input
+                id="req-requester"
+                type="text"
+                maxlength="150"
+                placeholder="กรอกชื่อผู้เบิก"
+                required
+              />
+            </label>
+
+            <label class="full-width">
+              วัสดุที่ต้องการเบิก
+              <input
+                id="req-item"
+                type="text"
+                list="req-item-options"
+                placeholder="พิมพ์ชื่อหรือรหัสวัสดุเพื่อค้นหา"
+                autocomplete="off"
+                required
+              />
+              <datalist id="req-item-options"></datalist>
+            </label>
+
+            <div
+              id="selected-item-info"
+              class="item-info full-width hidden"
+            ></div>
+
+            <label>
+              จำนวนที่ต้องการเบิก
+              <input
+                id="req-quantity"
+                type="number"
+                min="0.01"
+                step="any"
+                placeholder="ระบุจำนวน"
+                required
+              />
+              <small
+                id="req-remaining-preview"
+                class="quantity-preview"
+                aria-live="polite"
+              >
+                เลือกวัสดุเพื่อดูจำนวนคงเหลือหลังเบิก
+              </small>
+            </label>
+
+            <label>
+              หมายเหตุ
+              <input
+                id="req-remark"
+                type="text"
+                maxlength="500"
+                placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"
+              />
+            </label>
+
+            <div class="full-width form-actions">
+              <button
+                class="btn btn-primary"
+                type="submit"
+                id="submit-requisition"
+              >
+                บันทึกการเบิก
+              </button>
+              <button class="btn btn-light" type="reset">ล้างข้อมูล</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ประวัติการเบิกอยู่ใต้ฟอร์ม -->
+        <div class="panel" id="requisition-history-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>รายการเบิกวัสดุ</h2>
+              <p>ผู้ใช้ทั่วไปแก้ไขรายการได้ · การลบรายการสงวนสิทธิ์ Admin</p>
+            </div>
+
+            <button
+              class="btn btn-light"
+              id="refresh-requisitions"
+              type="button"
+            >
+              ↻ รีเฟรชรายการ
+            </button>
+          </div>
+
+          <div class="requisition-filters">
+            <label>
+              ค้นหา
+              <input id="requisition-search" type="search" placeholder="เลขที่เบิก ผู้เบิก หรือวัสดุ">
+            </label>
+            <label>
+              ตั้งแต่วันที่
+              <input id="requisition-start-date" type="date">
+            </label>
+            <label>
+              ถึงวันที่
+              <input id="requisition-end-date" type="date">
+            </label>
+            <label>
+              หน่วยงาน
+              <select id="requisition-department-filter">
+                <option value="">ทุกหน่วยงาน</option>
+              </select>
+            </label>
+            <label>
+              วัสดุ
+              <select id="requisition-item-filter">
+                <option value="">ทุกวัสดุ</option>
+              </select>
+            </label>
+            <button class="btn btn-light" id="reset-requisition-filters" type="button">
+              ล้างตัวกรอง
+            </button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>เลขที่เบิก</th>
+                  <th>วันที่</th>
+                  <th>แผนก</th>
+                  <th>ผู้เบิก</th>
+                  <th>รหัสวัสดุ</th>
+                  <th>ชื่อวัสดุ</th>
+                  <th>จำนวน</th>
+                  <th>หมายเหตุ</th>
+                  <th>จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="requisitions-body">
+                <tr>
+                  <td colspan="9" class="empty-cell">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= MONTHLY SURVEY ================= -->
+      <section id="page-survey" class="page hidden">
+        <div class="panel form-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>สำรวจความต้องการวัสดุรายเดือน</h2>
+              <p>บันทึกจำนวนวัสดุที่คาดว่าจะใช้และเหตุผลประกอบ</p>
+            </div>
+          </div>
+
+          <form id="survey-form" class="form-grid">
+            <label>
+              เดือนที่สำรวจ
+              <input id="survey-month" type="month" required />
+            </label>
+
+            <label>
+              แผนก
+              <select id="survey-department" required>
+                <option value="">กำลังโหลดแผนก...</option>
+              </select>
+            </label>
+
+            <div class="full-width survey-items-toolbar">
+              <div>
+                <strong>รายการวัสดุที่ต้องการสำรวจ</strong>
+                <span>เพิ่มวัสดุได้หลายรายการในครั้งเดียว</span>
+              </div>
+              <button
+                class="btn btn-light"
+                id="add-survey-item"
+                type="button"
+              >
+                ＋ เพิ่มรายการ
+              </button>
+            </div>
+
+            <div id="survey-items" class="full-width survey-items">
+              <div class="survey-item-row">
+                <div class="survey-item-fields">
+                  <label>
+                    ชื่อวัสดุ
+                    <input
+                      class="survey-item-name"
+                      type="text"
+                      maxlength="200"
+                      placeholder="กรอกชื่อวัสดุ"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    จำนวนที่คาดว่าจะใช้
+                    <input
+                      class="survey-quantity"
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      placeholder="ระบุจำนวน"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    เหตุผล / รายละเอียด
+                    <input
+                      class="survey-reason"
+                      type="text"
+                      maxlength="500"
+                      placeholder="ระบุเหตุผลที่ต้องใช้"
+                      required
+                    />
+                  </label>
+                </div>
+                <button
+                  class="btn btn-remove-survey-item"
+                  type="button"
+                  aria-label="ลบรายการวัสดุ"
+                  title="ลบรายการ"
+                >
+                  ลบรายการ
+                </button>
+              </div>
+            </div>
+
+            <div class="full-width form-actions">
+              <button class="btn btn-primary" type="submit" id="submit-survey">
+                บันทึกการสำรวจ
+              </button>
+              <button class="btn btn-light" type="reset">ล้างข้อมูล</button>
+            </div>
+          </form>
+
+          <p class="hint">
+            หมายเหตุ: บันทึกการสำรวจได้เฉพาะวันที่ 1–10 ของเดือน
+          </p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>ประวัติการสำรวจ</h2>
+              <p>ข้อมูลความต้องการวัสดุรายเดือน</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>รหัสสำรวจ</th>
+                  <th>เดือน</th>
+                  <th>แผนก</th>
+                  <th>วัสดุ</th>
+                  <th>จำนวนที่คาดว่าจะใช้</th>
+                  <th>เหตุผล</th>
+                </tr>
+              </thead>
+              <tbody id="surveys-body">
+                <tr>
+                  <td colspan="6" class="empty-cell">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <footer>Engineering Inventory Dashboard · Google Sheets</footer>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
